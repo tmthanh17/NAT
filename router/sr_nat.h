@@ -7,6 +7,7 @@
 #include <pthread.h>
 #include "sr_router.h"
 
+
 #define DEFAULT_ICMP_QUERY_TIMEOUT          60
 #define DEFAULT_TCP_ESTABLISH_IDLE_TIMEOUT  7440
 #define DEFAULT_TCP_TRANSITORY_IDLE_TIMEOUT 300
@@ -25,16 +26,22 @@ typedef enum {
 } sr_nat_mapping_type;
 
 
-/*
-typedef enum {
 
+typedef enum {
+  tcp_conn_outbound_syn,
+  tcp_conn_inbound_syn_pending,
+  tcp_conn_connected,
+  tcp_conn_time_wait
 }sr_nat_tcp_conn_state_t;
 
-*/
+
 
 struct sr_nat_connection {
   /* add TCP connection state data members here */
-  /*sr_nat_tcp_conn_state_t */
+  sr_nat_tcp_conn_state_t conn_state;
+  time_t last_accessed;
+  sr_ip_hdr_t *QueuedInboundSyn;
+  
   struct sr_nat_connection *next;
 };
 
@@ -89,4 +96,7 @@ struct sr_nat_mapping *sr_nat_insert_mapping(struct sr_nat *nat,
 
 int sr_nat_verify_connection(struct sr_instance *sr);
 uint16_t sr_nat_aux_ext(struct sr_nat *nat, sr_nat_mapping_type type);
+static void sr_nat_destroy_mapping_node(struct sr_nat *nat, struct sr_nat_mapping *mapping_node);
+static void sr_nat_destroy_connection_node(struct sr_nat_mapping *mapping_node, struct sr_nat_connection *connection_node);
+static struct sr_nat_mapping *sr_nat_create_mapping_node(struct sr_nat *nat, uint32_t ip_int, uint16_t aux_int, sr_nat_mapping_type type);
 #endif

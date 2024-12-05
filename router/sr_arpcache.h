@@ -70,6 +70,8 @@
 #include <time.h>
 #include <pthread.h>
 #include "sr_if.h"
+#include "sr_protocol.h"
+#include "sr_rt.h"
 
 #define SR_ARPCACHE_SZ    100  
 #define SR_ARPCACHE_TO    15.0
@@ -105,6 +107,12 @@ struct sr_arpcache {
     pthread_mutex_t lock;
     pthread_mutexattr_t attr;
 };
+
+
+typedef struct {
+	void (*send)(struct sr_instance *, struct sr_if *, uint32_t, unsigned char *);
+}sr_arp_pkt_t;
+
 
 /* Checks if an IP->MAC mapping is in the cache. IP is in network byte order. 
    You must free the returned structure if it is not NULL. */
@@ -149,6 +157,6 @@ void *sr_arpcache_timeout(void *cache_ptr);
 
 
 
-void sr_send_arp_reply (struct sr_instance *sr, sr_arp_hdr_t *arp_hdr_recv, struct sr_if *if_node);
-void sr_send_arp_request(struct sr_instance *sr, sr_arp_hdr_t *arp_hdr_recv, struct sr_if *if_node);
+void sr_send_arp_reply(struct sr_instance *sr, struct sr_if *nexthop_if, uint32_t ip_dst, unsigned char *mac_dst);
+void sr_send_arp_request(struct sr_instance *sr, struct sr_if *nexthop_if, uint32_t ip_dst, unsigned char *mac_dst);
 #endif

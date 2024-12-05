@@ -10,26 +10,26 @@
 #include "sr_router.h"
 #include "sr_if.h"
 #include "sr_protocol.h"
-
-
-void sr_send_arp_reply (struct sr_instance *sr, sr_arp_hdr_t *arp_hdr_recv, struct sr_if *if_node) {
+#include "sr_rt.h"
+extern sr_icmp_pkt_t sr_icmp_pkt[2];
+void sr_send_arp_reply(struct sr_instance *sr, struct sr_if *nexthop_if, uint32_t ip_dst, unsigned char *mac_dst) {
     uint16_t buf_len = sizeof(sr_ethernet_hdr_t) + sizeof(sr_arp_hdr_t);
     uint8_t *buf =  (uint8_t *) calloc(buf_len, 1);
     sr_ethernet_hdr_t *eth_hdr_reply = calloc(sizeof(sr_ethernet_hdr_t), 1);
     sr_arp_hdr_t *arp_hdr_reply = calloc(sizeof(sr_arp_hdr_t), 1);
 
-    arp_hdr_reply->ar_hrd = arp_hdr_recv->ar_hrd;
-    arp_hdr_reply->ar_pro = arp_hdr_recv->ar_pro;
-    arp_hdr_reply->ar_hln = arp_hdr_recv->ar_hln;
-    arp_hdr_reply->ar_pln = arp_hdr_recv->ar_pln;
+    arp_hdr_reply->ar_hrd = htons(arp_hrd_ether);
+    arp_hdr_reply->ar_pro = htons(arp_pro_ipv4);
+    arp_hdr_reply->ar_hln = arp_len_hrd;
+    arp_hdr_reply->ar_pln = arp_len_pro;
     arp_hdr_reply->ar_op  = htons(arp_op_reply);
-    memcpy(arp_hdr_reply->ar_sha, if_node->addr, ETHER_ADDR_LEN);
-    arp_hdr_reply->ar_sip = if_node->ip;
-    memcpy(arp_hdr_reply->ar_tha, arp_hdr_recv->ar_sha, ETHER_ADDR_LEN);
-    arp_hdr_reply->ar_tip = arp_hdr_recv->ar_sip;
+    memcpy(arp_hdr_reply->ar_sha, nexthop_if->addr, ETHER_ADDR_LEN);
+    arp_hdr_reply->ar_sip = nexthop_if->ip;
+    memcpy(arp_hdr_reply->ar_tha, mac_dst, ETHER_ADDR_LEN);
+    arp_hdr_reply->ar_tip = ip_dst;
 
-    memcpy(eth_hdr_reply->ether_dhost, arp_hdr_recv->ar_sha, ETHER_ADDR_LEN);
-    memcpy(eth_hdr_reply->ether_shost, if_node->addr, ETHER_ADDR_LEN);
+    memcpy(eth_hdr_reply->ether_dhost, mac_dst, ETHER_ADDR_LEN);
+    memcpy(eth_hdr_reply->ether_shost, nexthop_if->addr, ETHER_ADDR_LEN);
     eth_hdr_reply->ether_type = htons(ethertype_arp);
 
     memcpy(buf, eth_hdr_reply, sizeof(sr_ethernet_hdr_t));
@@ -41,9 +41,36 @@ void sr_send_arp_reply (struct sr_instance *sr, sr_arp_hdr_t *arp_hdr_recv, stru
     free(buf);
 }
 
-void sr_send_arp_request(struct sr_instance *sr, sr_arp_hdr_t *arp_hdr_recv, struct sr_if *if_node) {
+void sr_send_arp_request(struct sr_instance *sr, struct sr_if *nexthop_if, uint32_t ip_dst, unsigned char *mac_dst) {
 
 }
+
+enum sr_packet_state sr_handle_arpreq(struct sr_instance *sr, struct sr_arpreq *req) {
+    time_t current_time = time(NULL);
+    struct sr_rt *rt = rt_longest_prefix_match(sr, req->ip);
+    struct sr_if *nexthop_if = sr_get_interface(sr, rt->interface);
+    sr_ip_hdr_t *ip_hdr;
+    if ((current_time - req->sent) >= 1.0) {
+        if (req->times_sent >= 5) {
+            /* send icmp host unreachable to source addr of all pkts waiting
+                on this request */
+            struct sr_packet *pkt;
+            for (pkt = req->packets; pkt != NULL; pkt = pkt->next) {
+                ip_hdr = (sr_ip_hdr_t *) (pkt->buf + sizeof(sr_ethernet_hdr_t));
+                rt = rt_longest_prefix_match(sr, ip_hdr->ip_src);
+                sr_icmp_pkt[1].send(sr, pkt->buf, rt->interface, dst_host_unreachable);
+            }
+            sr_arpreq_destroy(&sr->cache, req);
+        }
+        else
+        {
+            /*sr_send_arp_request(sr, nexthop_if, req->ip);*/
+            req->sent = current_time;
+            req->times_sent++;
+        }
+    }
+}
+
 
 /* 
   This function gets called every second. For each request sent out, we keep

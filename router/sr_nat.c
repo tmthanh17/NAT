@@ -50,6 +50,7 @@ void *sr_nat_timeout(void *nat_ptr) {  /* Periodic Timout handling */
   struct sr_nat *nat = (struct sr_nat *)nat_ptr;
   struct sr_nat_mapping *mapping_node;
   struct sr_nat_mapping *mapping_node_next;
+  struct sr_nat_connection *connection_node, *connection_node_next;
   while (1) {
     sleep(1.0);
     pthread_mutex_lock(&(nat->lock));
@@ -57,15 +58,47 @@ void *sr_nat_timeout(void *nat_ptr) {  /* Periodic Timout handling */
     time_t curtime = time(NULL);
 
     /* handle periodic tasks here */
-    for (mapping_node = nat->mappings; mapping_node != NULL; mapping_node = mapping_node->next) {
+    for (mapping_node = nat->mappings; mapping_node != NULL; ) {
       if (mapping_node->type == nat_mapping_icmp) {
         if (difftime(curtime, mapping_node->last_updated) > nat->icmp_query_timeout) {
           mapping_node_next = mapping_node->next;
-
+          sr_nat_destroy_mapping_node(nat, mapping_node);
+          mapping_node = mapping_node_next;
+        }
+        else {
+          mapping_node = mapping_node->next;
         }
       }
       else if (mapping_node->type == nat_mapping_tcp) {
-
+        connection_node = mapping_node->conns;
+        while (connection_node) {
+          if ((connection_node->conn_state == tcp_conn_connected) && (difftime(curtime, connection_node->last_accessed) > nat->tcp_establish_idle_timeout)) { 
+            connection_node_next = connection_node->next;
+            sr_nat_destroy_connection_node(mapping_node, connection_node);
+            connection_node = connection_node_next;
+          }
+          else if (((connection_node->conn_state == tcp_conn_time_wait) || (connection_node->conn_state == tcp_conn_outbound_syn)) &&
+           (difftime(curtime, connection_node->last_accessed) > nat->tcp_transitory_idle_timeout)) {
+            connection_node_next = connection_node->next;
+            sr_nat_destroy_connection_node(mapping_node, connection_node);
+            connection_node = connection_node_next;
+          }
+          else {
+            connection_node = connection_node->next;
+          }
+        }
+        if (mapping_node->conns == NULL) {
+          /* No TCP connection */
+          mapping_node_next = mapping_node->next;
+          sr_nat_destroy_mapping_node(nat, mapping_node);
+          mapping_node = mapping_node_next;
+        }
+        else {
+          mapping_node = mapping_node->next;
+        }
+      }
+      else {
+        mapping_node = mapping_node->next;
       }
     }
 
@@ -131,10 +164,12 @@ struct sr_nat_mapping *sr_nat_insert_mapping(struct sr_nat *nat,
   pthread_mutex_lock(&(nat->lock));
 
   /* handle insert here, create a mapping, and then return a copy of it */
-  struct sr_nat_mapping *mapping = NULL;
+  struct sr_nat_mapping *mapping_node = sr_nat_create_mapping_node (nat, ip_int, aux_int, type);
+  struct sr_nat_mapping *copy = NULL;
+  memcpy (copy, mapping_node, sizeof(struct sr_nat_mapping));
 
   pthread_mutex_unlock(&(nat->lock));
-  return mapping;
+  return copy;
 }
 
 
@@ -148,7 +183,7 @@ int sr_nat_verify_connection(struct sr_instance *sr) {
 }
 
 
-static struct sr_nat_mapping sr_nat_create_mapping(struct sr_nat *nat, uint32_t ip_int, uint16_t aux_int, sr_nat_mapping_type type) {
+static struct sr_nat_mapping *sr_nat_create_mapping_node(struct sr_nat *nat, uint32_t ip_int, uint16_t aux_int, sr_nat_mapping_type type) {
   struct sr_nat_mapping *mapping_node = calloc (sizeof(struct sr_nat_mapping), 1);
   /* Store infomation before mapping*/
   mapping_node->type    = type;
@@ -157,11 +192,13 @@ static struct sr_nat_mapping sr_nat_create_mapping(struct sr_nat *nat, uint32_t 
   mapping_node->last_updated = time(NULL);
 
   /* Transfer to external port or icmp id*/
-  mapping_node->aux_ext = sr_nat_aux_ext(nat, type);
+  mapping_node->aux_ext = htons(sr_nat_aux_ext(nat, type));
 
   /* Add mapping to front of the list*/
   mapping_node->next = nat->mappings;
   nat->mappings = mapping_node;
+
+  return mapping_node;
 }
 
 
@@ -194,8 +231,9 @@ uint16_t sr_nat_aux_ext(struct sr_nat *nat, sr_nat_mapping_type type) {
 }
 
 static void sr_nat_destroy_mapping_node(struct sr_nat *nat, struct sr_nat_mapping *mapping_node) {
+  struct sr_nat_mapping *current_node, *prev_node = NULL, *next_node = NULL;
+  struct sr_nat_connection *curr_connection ;
   if (mapping_node) {
-    struct sr_nat_mapping *current_node, *prev_node, *next_node;
     for (current_node = nat->mappings; current_node != NULL; current_node = current_node->next) {
       if (current_node == mapping_node) {
         if (prev_node) {
@@ -204,12 +242,48 @@ static void sr_nat_destroy_mapping_node(struct sr_nat *nat, struct sr_nat_mappin
         }
         else {
           next_node = current_node->next;
-          nat->mappings = nex_node;
+          nat->mappings = next_node;
         }
         break;
       }
-      
+      prev_node = current_node;
 
     }
+    /* Delete all list of connection in mapping_node */
+    while (mapping_node->conns != NULL) {
+      curr_connection = mapping_node->conns;
+      mapping_node->conns = curr_connection->next;
+      free(curr_connection);
+    }
+    free(mapping_node);
   }
+}
+
+static void sr_nat_destroy_connection_node(struct sr_nat_mapping *mapping_node, struct sr_nat_connection *connection_node) {
+  struct sr_nat_connection *current_node, *prev_node = NULL, *next_node = NULL;
+  if(mapping_node && connection_node) {
+    for (current_node = mapping_node->conns; current_node != NULL; current_node = current_node->next) {
+      if (current_node == connection_node) {
+        if (prev_node) {
+          next_node = current_node->next;
+          prev_node->next = next_node;
+        }
+        else {
+          next_node = current_node->next;
+          mapping_node->conns = next_node;
+        }
+        break;
+      }
+      prev_node = current_node;
+    }
+    /**/ 
+    while (current_node->QueuedInboundSyn != NULL){
+      free(current_node->QueuedInboundSyn);
+    }
+    free(current_node);
+  }
+}
+
+void sr_nat_outbound_icmp_packet(struct sr_instance *sr, uint8_t *packet, char interface, struct sr_nat_mapping *mapping_node) {
+  
 }

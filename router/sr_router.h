@@ -60,10 +60,6 @@ struct sr_instance
 };
 
 typedef struct {
-	void (*send)(struct sr_instance *, sr_arp_hdr_t *, struct sr_if *);
-}sr_arp_pkt_t;
-
-typedef struct {
   void (*send)(struct sr_instance *, uint8_t *, char *, enum sr_icmp_state);
 }sr_icmp_pkt_t;
 
