@@ -32,6 +32,7 @@
 #include "sr_dumper.h"
 #include "sr_router.h"
 #include "sr_rt.h"
+#include "sr_nat.h"
 
 extern char* optarg;
 
@@ -44,6 +45,7 @@ extern char* optarg;
 #define DEFAULT_SERVER "localhost"
 #define DEFAULT_RTABLE "rtable"
 #define DEFAULT_TOPO 0
+
 
 static void usage(char* );
 static void sr_init_instance(struct sr_instance* );
@@ -64,12 +66,16 @@ int main(int argc, char **argv)
     char *template = NULL;
     unsigned int port = DEFAULT_PORT;
     unsigned int topo = DEFAULT_TOPO;
+    int natconnection = NAT_DISABLE;
+    int nat_icmp_query_timeout = DEFAULT_ICMP_QUERY_TIMEOUT;
+    int nat_tcp_established_idle_timeout = DEFAULT_TCP_ESTABLISH_IDLE_TIMEOUT;
+    int nat_tcp_transitory_idle_timeout = DEFAULT_TCP_TRANSITORY_IDLE_TIMEOUT;
     char *logfile = 0;
     struct sr_instance sr;
 
     printf("Using %s\n", VERSION_INFO);
 
-    while ((c = getopt(argc, argv, "hs:v:p:u:t:r:l:T:")) != EOF)
+    while ((c = getopt(argc, argv, "hns:v:p:u:t:r:l:T:I:E:R")) != EOF)
     {
         switch (c)
         {
@@ -100,6 +106,18 @@ int main(int argc, char **argv)
                 break;
             case 'T':
                 template = optarg;
+                break;
+            case 'n':
+                natconnection = NAT_ENABLE;
+                break;
+            case 'I':
+                nat_icmp_query_timeout = atoi(optarg);
+                break;
+            case 'E':
+                nat_tcp_established_idle_timeout = atoi(optarg);
+                break;
+            case 'R':
+                nat_tcp_transitory_idle_timeout = atoi(optarg);
                 break;
         } /* switch */
     } /* -- while -- */
@@ -154,6 +172,17 @@ int main(int argc, char **argv)
     else {
       /* Read from specified routing table */
       sr_load_rt_wrap(&sr, rtable);
+    }
+    if (natconnection == NAT_DISABLE) {
+        sr.nat = NULL;
+        sr.nat->connection = NAT_DISABLE;
+        
+    } else if (natconnection == NAT_ENABLE) {
+        sr.nat = calloc(sizeof(struct sr_nat), 1);
+        sr.nat->connection = NAT_ENABLE;
+        sr.nat->icmp_query_timeout = nat_icmp_query_timeout;
+        sr.nat->tcp_establish_idle_timeout = nat_tcp_established_idle_timeout;
+        sr.nat->tcp_transitory_idle_timeout = nat_tcp_transitory_idle_timeout;
     }
 
     /* call router init (for arp subsystem etc.) */

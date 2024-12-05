@@ -101,7 +101,14 @@ struct sr_icmp_t3_hdr {
 } __attribute__ ((packed)) ;
 typedef struct sr_icmp_t3_hdr sr_icmp_t3_hdr_t;
 
-
+enum sr_icmp_state {
+  echo_reply,
+  dst_net_unreachable,
+  dst_host_unreachable,
+  port_unreachable,
+  time_exceeded,
+  success
+};
 
 
 /*

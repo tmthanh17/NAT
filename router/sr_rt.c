@@ -176,3 +176,19 @@ void sr_print_routing_entry(struct sr_rt* entry)
     printf("%s\n",entry->interface);
 
 } /* -- sr_print_routing_entry -- */
+
+
+struct sr_rt *longest_prefix_match(struct sr_instance *sr, uint32_t ip_dst) {
+    struct sr_rt *rt_node;
+    struct sr_rt *rt = NULL;
+    uint32_t temp = 0;
+    for (rt_node = sr->routing_table; rt_node != NULL; rt_node = rt_node->next) {
+        if ((rt_node->dest.s_addr & rt_node->mask.s_addr) == (ip_dst & rt_node->mask.s_addr)) {
+            if (rt_node->mask.s_addr >= temp){
+                temp = rt_node->mask.s_addr;
+                rt = rt_node;
+            }
+        }
+    }
+    return rt;
+}

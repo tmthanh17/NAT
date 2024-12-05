@@ -16,6 +16,8 @@
 #include "sr_protocol.h"
 #include "sr_arpcache.h"
 
+#include <stdbool.h>
+
 /* we dont like this debug , but what to do for varargs ? */
 #ifdef _DEBUG_
 #define Debug(x, args...) printf(x, ## args)
@@ -52,9 +54,18 @@ struct sr_instance
     struct sr_if* if_list; /* list of interfaces */
     struct sr_rt* routing_table; /* routing table */
     struct sr_arpcache cache;   /* ARP cache */
+    struct sr_nat* nat;
     pthread_attr_t attr;
     FILE* logfile;
 };
+
+typedef struct {
+	void (*send)(struct sr_instance *, sr_arp_hdr_t *, struct sr_if *);
+}sr_arp_pkt_t;
+
+typedef struct {
+  void (*send)(struct sr_instance *, uint8_t *, char *, enum sr_icmp_state);
+}sr_icmp_pkt_t;
 
 /* -- sr_main.c -- */
 int sr_verify_routing_table(struct sr_instance* sr);
@@ -67,6 +78,9 @@ int sr_read_from_server(struct sr_instance* );
 /* -- sr_router.c -- */
 void sr_init(struct sr_instance* );
 void sr_handlepacket(struct sr_instance* , uint8_t * , unsigned int , char* );
+void sr_send_icmp_echo(struct sr_instance *sr, uint8_t *packet, char *interface, enum sr_icmp_state icmp_state);
+void sr_send_icmp_report(struct sr_instance *sr, uint8_t *packet, char *interface, enum sr_icmp_state icmp_state);
+
 
 /* -- sr_if.c -- */
 void sr_add_interface(struct sr_instance* , const char* );

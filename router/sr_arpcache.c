@@ -11,6 +11,40 @@
 #include "sr_if.h"
 #include "sr_protocol.h"
 
+
+void sr_send_arp_reply (struct sr_instance *sr, sr_arp_hdr_t *arp_hdr_recv, struct sr_if *if_node) {
+    uint16_t buf_len = sizeof(sr_ethernet_hdr_t) + sizeof(sr_arp_hdr_t);
+    uint8_t *buf =  (uint8_t *) calloc(buf_len, 1);
+    sr_ethernet_hdr_t *eth_hdr_reply = calloc(sizeof(sr_ethernet_hdr_t), 1);
+    sr_arp_hdr_t *arp_hdr_reply = calloc(sizeof(sr_arp_hdr_t), 1);
+
+    arp_hdr_reply->ar_hrd = arp_hdr_recv->ar_hrd;
+    arp_hdr_reply->ar_pro = arp_hdr_recv->ar_pro;
+    arp_hdr_reply->ar_hln = arp_hdr_recv->ar_hln;
+    arp_hdr_reply->ar_pln = arp_hdr_recv->ar_pln;
+    arp_hdr_reply->ar_op  = htons(arp_op_reply);
+    memcpy(arp_hdr_reply->ar_sha, if_node->addr, ETHER_ADDR_LEN);
+    arp_hdr_reply->ar_sip = if_node->ip;
+    memcpy(arp_hdr_reply->ar_tha, arp_hdr_recv->ar_sha, ETHER_ADDR_LEN);
+    arp_hdr_reply->ar_tip = arp_hdr_recv->ar_sip;
+
+    memcpy(eth_hdr_reply->ether_dhost, arp_hdr_recv->ar_sha, ETHER_ADDR_LEN);
+    memcpy(eth_hdr_reply->ether_shost, if_node->addr, ETHER_ADDR_LEN);
+    eth_hdr_reply->ether_type = htons(ethertype_arp);
+
+    memcpy(buf, eth_hdr_reply, sizeof(sr_ethernet_hdr_t));
+    memcpy(buf + sizeof(sr_ethernet_hdr_t), arp_hdr_reply, sizeof(sr_arp_hdr_t));
+    /*print_hdrs(buf, buf_len);*/
+    sr_send_packet(sr, buf, buf_len, if_node->name);
+    free(eth_hdr_reply);
+    free(arp_hdr_reply);
+    free(buf);
+}
+
+void sr_send_arp_request(struct sr_instance *sr, sr_arp_hdr_t *arp_hdr_recv, struct sr_if *if_node) {
+
+}
+
 /* 
   This function gets called every second. For each request sent out, we keep
   checking whether we should resend an request or destroy the arp request.
