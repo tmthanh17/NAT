@@ -178,7 +178,7 @@ void sr_print_routing_entry(struct sr_rt* entry)
 } /* -- sr_print_routing_entry -- */
 
 
-struct sr_rt *longest_prefix_match(struct sr_instance *sr, uint32_t ip_dst) {
+struct sr_rt *rt_longest_prefix_match(struct sr_instance *sr, uint32_t ip_dst) {
     struct sr_rt *rt_node;
     struct sr_rt *rt = NULL;
     uint32_t temp = 0;

@@ -24,6 +24,13 @@
 
 #include "sr_if.h"
 #include "sr_router.h"
+/*
+ Field: List of internal and external interface
+ */
+static const struct table_if name_if = {
+  .int_if = {"eth1"},
+  .ext_if = {"eth2"}
+};
 
 /*--------------------------------------------------------------------- 
  * Method: sr_get_interface
@@ -192,3 +199,23 @@ void sr_print_if(struct sr_if* iface)
     Debug("\n");
     Debug("\tinet addr %s\n",inet_ntoa(ip_addr));
 } /* -- sr_print_if -- */
+
+
+/* 
+Method : Determin internal or external interface 
+*/
+int sr_verify_interface(char *interface_recv){
+  int i = 0;
+  for (i = 0; i < NUMBER_INTERNAL_INTERFACE; i++) {
+    if (strcmp(interface_recv, name_if.int_if[0]) == 0) {
+      return INTERNAL_INTERFACE;
+    }
+  }
+  for (i = 0; i < NUMBER_EXTERNAL_INTERFACE; i++) {
+    if (strcmp(interface_recv, name_if.ext_if[0]) == 0) {
+      return EXTERNAL_INTERFACE;
+    }
+  }
+  return -1;
+
+}

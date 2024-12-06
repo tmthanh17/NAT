@@ -116,6 +116,8 @@ void print_hdr_icmp(uint8_t *buf) {
   fprintf(stderr, "\tcode: %d\n", icmp_hdr->icmp_code);
   /* Keep checksum in NBO */
   fprintf(stderr, "\tchecksum: %d\n", icmp_hdr->icmp_sum);
+  fprintf(stderr, "\tidentifier: %d\n", icmp_hdr->icmp_id);
+  fprintf(stderr, "\tsequence number: %d\n", icmp_hdr->icmp_seqno);
 }
 
 
@@ -182,4 +184,3 @@ void print_hdrs(uint8_t *buf, uint32_t length) {
     fprintf(stderr, "Unrecognized Ethernet Type: %d\n", ethtype);
   }
 }
-

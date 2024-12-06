@@ -165,9 +165,9 @@ struct sr_nat_mapping *sr_nat_insert_mapping(struct sr_nat *nat,
 
   /* handle insert here, create a mapping, and then return a copy of it */
   struct sr_nat_mapping *mapping_node = sr_nat_create_mapping_node (nat, ip_int, aux_int, type);
-  struct sr_nat_mapping *copy = NULL;
+  
+  struct sr_nat_mapping *copy = calloc(sizeof(struct sr_nat_mapping), 1);
   memcpy (copy, mapping_node, sizeof(struct sr_nat_mapping));
-
   pthread_mutex_unlock(&(nat->lock));
   return copy;
 }
@@ -230,6 +230,7 @@ uint16_t sr_nat_aux_ext(struct sr_nat *nat, sr_nat_mapping_type type) {
   return aux_ext;
 }
 
+
 static void sr_nat_destroy_mapping_node(struct sr_nat *nat, struct sr_nat_mapping *mapping_node) {
   struct sr_nat_mapping *current_node, *prev_node = NULL, *next_node = NULL;
   struct sr_nat_connection *curr_connection ;
@@ -284,6 +285,24 @@ static void sr_nat_destroy_connection_node(struct sr_nat_mapping *mapping_node, 
   }
 }
 
-void sr_nat_outbound_icmp_packet(struct sr_instance *sr, uint8_t *packet, char interface, struct sr_nat_mapping *mapping_node) {
+void sr_nat_outbound_icmp_packet(struct sr_instance *sr, uint8_t *packet, unsigned int len, char interface_recv, struct sr_nat_mapping *mapping_node) {
+  enum sr_icmp_state state;
+  uint8_t *buf = calloc(len , 1);
+  memcpy(buf, packet, len);
+  sr_ip_hdr_t *ip_hdr_recv = (sr_ip_hdr_t *) (buf + sizeof(sr_ethernet_hdr_t));
+  sr_icmp_hdr_t *icmp_hdr_recv = (sr_icmp_hdr_t *) (buf + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
+  uint16_t icmp_pkt_len = ntohs(ip_hdr_recv->ip_len) - sizeof(sr_ip_hdr_t);
+  icmp_hdr_recv->icmp_id = mapping_node->aux_ext;
+  icmp_hdr_recv->icmp_sum = 0;
+  icmp_hdr_recv->icmp_sum = cksum(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t), icmp_pkt_len);
   
+  nexthop_if = sr_get_interface(sr, rt->interface);
+  ip_hdr_recv->ip_src = nexthop_if->ip;
+  printf("After mapping\n");
+  print_hdrs(packet, len);
+  state = sr_forwarding_packet(sr, buf, len, ip_hdr_recv->ip_dst);
+  if(state != success) {
+    printf("ICMP: Packet has problem\n");
+  } 
+  free(buf);
 }

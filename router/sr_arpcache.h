@@ -156,7 +156,7 @@ int   sr_arpcache_destroy(struct sr_arpcache *cache);
 void *sr_arpcache_timeout(void *cache_ptr);
 
 
-
+enum sr_icmp_state  sr_handle_arpreq(struct sr_instance *sr, struct sr_arpreq *req);
 void sr_send_arp_reply(struct sr_instance *sr, struct sr_if *nexthop_if, uint32_t ip_dst, unsigned char *mac_dst);
 void sr_send_arp_request(struct sr_instance *sr, struct sr_if *nexthop_if, uint32_t ip_dst, unsigned char *mac_dst);
 #endif

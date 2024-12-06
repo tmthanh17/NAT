@@ -8,7 +8,6 @@
 #include <string.h>
 #include "sr_arpcache.h"
 #include "sr_router.h"
-#include "sr_if.h"
 #include "sr_protocol.h"
 #include "sr_rt.h"
 extern sr_icmp_pkt_t sr_icmp_pkt[2];
@@ -35,17 +34,42 @@ void sr_send_arp_reply(struct sr_instance *sr, struct sr_if *nexthop_if, uint32_
     memcpy(buf, eth_hdr_reply, sizeof(sr_ethernet_hdr_t));
     memcpy(buf + sizeof(sr_ethernet_hdr_t), arp_hdr_reply, sizeof(sr_arp_hdr_t));
     /*print_hdrs(buf, buf_len);*/
-    sr_send_packet(sr, buf, buf_len, if_node->name);
+    sr_send_packet(sr, buf, buf_len, nexthop_if->name);
     free(eth_hdr_reply);
     free(arp_hdr_reply);
     free(buf);
 }
 
 void sr_send_arp_request(struct sr_instance *sr, struct sr_if *nexthop_if, uint32_t ip_dst, unsigned char *mac_dst) {
+    uint16_t buf_len = sizeof(sr_ethernet_hdr_t) + sizeof(sr_arp_hdr_t);
+    uint8_t *buf = calloc(buf_len, 1);
+    sr_ethernet_hdr_t *eth_hdr_request = calloc(sizeof(sr_ethernet_hdr_t), 1);
+    sr_arp_hdr_t *arp_hdr_request = calloc(sizeof(arp_hdr_request), 1);
 
+    memset(eth_hdr_request->ether_dhost, 255, ETHER_ADDR_LEN);
+    memcpy(eth_hdr_request->ether_shost, nexthop_if->addr, ETHER_ADDR_LEN);
+    eth_hdr_request->ether_type = htons(ethertype_arp);
+
+    arp_hdr_request->ar_hrd = htons(arp_hrd_ether);
+    arp_hdr_request->ar_pro = htons(arp_pro_ipv4);
+    arp_hdr_request->ar_hln = arp_len_hrd;
+    arp_hdr_request->ar_pln = arp_len_pro;
+    arp_hdr_request->ar_op  = htons(arp_op_request);
+    memcpy(arp_hdr_request->ar_sha, nexthop_if->addr, ETHER_ADDR_LEN);
+    arp_hdr_request->ar_sip = nexthop_if->ip;
+    memset(arp_hdr_request->ar_tha, 0, ETHER_ADDR_LEN);
+    arp_hdr_request->ar_tip = ip_dst;
+
+    memcpy(buf, eth_hdr_request, sizeof(sr_ethernet_hdr_t));
+    memcpy(buf + sizeof(sr_ethernet_hdr_t), arp_hdr_request, sizeof(sr_arp_hdr_t));
+
+    sr_send_packet(sr, buf, sizeof(sr_ethernet_hdr_t) + sizeof(sr_arp_hdr_t), nexthop_if->name);
+    free(eth_hdr_request);
+    free(eth_hdr_request);
+    free(buf);
 }
 
-enum sr_packet_state sr_handle_arpreq(struct sr_instance *sr, struct sr_arpreq *req) {
+enum sr_icmp_state sr_handle_arpreq(struct sr_instance *sr, struct sr_arpreq *req) {
     time_t current_time = time(NULL);
     struct sr_rt *rt = rt_longest_prefix_match(sr, req->ip);
     struct sr_if *nexthop_if = sr_get_interface(sr, rt->interface);
@@ -69,6 +93,7 @@ enum sr_packet_state sr_handle_arpreq(struct sr_instance *sr, struct sr_arpreq *
             req->times_sent++;
         }
     }
+    return success;
 }
 
 

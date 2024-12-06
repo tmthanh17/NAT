@@ -27,6 +27,16 @@
 #include "sr_protocol.h"
 
 struct sr_instance;
+#define NUMBER_INTERNAL_INTERFACE 1
+#define NUMBER_EXTERNAL_INTERFACE 1
+#define INTERNAL_INTERFACE 1
+#define EXTERNAL_INTERFACE 0
+
+struct table_if{
+  const char *int_if[NUMBER_INTERNAL_INTERFACE];
+  const char *ext_if[NUMBER_EXTERNAL_INTERFACE];
+};
+
 
 /* ----------------------------------------------------------------------------
  * struct sr_if
@@ -44,6 +54,7 @@ struct sr_if
   struct sr_if* next;
 };
 
+
 struct sr_if* sr_get_interface(struct sr_instance* sr, const char* name);
 void sr_add_interface(struct sr_instance*, const char*);
 void sr_set_ether_addr(struct sr_instance*, const unsigned char*);
@@ -51,4 +62,5 @@ void sr_set_ether_ip(struct sr_instance*, uint32_t ip_nbo);
 void sr_print_if_list(struct sr_instance*);
 void sr_print_if(struct sr_if*);
 
+int sr_verify_interface(char *interface_recv);
 #endif /* --  sr_INTERFACE_H -- */
