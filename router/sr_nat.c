@@ -285,24 +285,92 @@ static void sr_nat_destroy_connection_node(struct sr_nat_mapping *mapping_node, 
   }
 }
 
-void sr_nat_outbound_icmp_packet(struct sr_instance *sr, uint8_t *packet, unsigned int len, char interface_recv, struct sr_nat_mapping *mapping_node) {
-  enum sr_icmp_state state;
-  uint8_t *buf = calloc(len , 1);
-  memcpy(buf, packet, len);
-  sr_ip_hdr_t *ip_hdr_recv = (sr_ip_hdr_t *) (buf + sizeof(sr_ethernet_hdr_t));
-  sr_icmp_hdr_t *icmp_hdr_recv = (sr_icmp_hdr_t *) (buf + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
+void sr_nat_outbound_icmp_packet(struct sr_instance *sr, uint8_t *packet, struct sr_nat_mapping *mapping_node) {
+  struct sr_if *nexthop_if;
+  struct sr_rt *rt;
+  /*
+  printf("Before mapping\n");
+  print_hdrs(buf, len);
+  */
+ 
+  sr_ip_hdr_t *ip_hdr_recv = (sr_ip_hdr_t *) (packet + sizeof(sr_ethernet_hdr_t));
+  sr_icmp_hdr_t *icmp_hdr_recv = (sr_icmp_hdr_t *) (packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
+
   uint16_t icmp_pkt_len = ntohs(ip_hdr_recv->ip_len) - sizeof(sr_ip_hdr_t);
   icmp_hdr_recv->icmp_id = mapping_node->aux_ext;
   icmp_hdr_recv->icmp_sum = 0;
   icmp_hdr_recv->icmp_sum = cksum(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t), icmp_pkt_len);
-  
+
+  rt = rt_longest_prefix_match(sr, ip_hdr_recv->ip_dst);
   nexthop_if = sr_get_interface(sr, rt->interface);
+
   ip_hdr_recv->ip_src = nexthop_if->ip;
-  printf("After mapping\n");
-  print_hdrs(packet, len);
-  state = sr_forwarding_packet(sr, buf, len, ip_hdr_recv->ip_dst);
-  if(state != success) {
-    printf("ICMP: Packet has problem\n");
-  } 
-  free(buf);
+  ip_hdr_recv->ip_sum = 0;
+  ip_hdr_recv->ip_sum = cksum(ip_hdr_recv, sizeof(sr_ip_hdr_t));
+  
 }
+
+void sr_nat_inbound_icmp_packet(struct sr_instance *sr, uint8_t *packet, struct sr_nat_mapping *mapping_node) {
+  struct sr_rt *rt;
+  struct sr_if *nexthop_if;
+
+
+  sr_ip_hdr_t *ip_hdr_recv = (sr_ip_hdr_t *) (packet + sizeof(sr_ethernet_hdr_t));
+  sr_icmp_hdr_t *icmp_hdr_recv = (sr_icmp_hdr_t *) (packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
+  uint16_t icmp_pkt_len = ntohs(ip_hdr_recv->ip_len) - sizeof(sr_ip_hdr_t);
+
+  icmp_hdr_recv->icmp_id = mapping_node->aux_int;
+  icmp_hdr_recv->icmp_sum = 0;
+  icmp_hdr_recv->icmp_sum = cksum(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t), icmp_pkt_len);
+ 
+  ip_hdr_recv->ip_dst = mapping_node->ip_int;
+}
+
+
+
+/*
+        if (((icmp_hdr_recv->icmp_type == 8) || (icmp_hdr_recv->icmp_type == 0)) && (icmp_hdr_recv->icmp_code == 0)) {
+				mapping_ext = sr_nat_lookup_external(sr->nat, icmp_hdr_recv->icmp_id, nat_mapping_icmp);
+				mapping_int = sr_nat_lookup_internal(sr->nat, ip_hdr_recv->ip_src, icmp_hdr_recv->icmp_id, nat_mapping_icmp);
+				for (if_node = sr->if_list; if_node != NULL; if_node = if_node->next) {
+					 Packet containing ICMP is destined for router's interface
+					if ((ip_hdr_recv->ip_dst == if_node->ip) && (!mapping_int) && (!mapping_ext)) {
+						printf("ICMP: Destination is router's interface\n");
+						sr_icmp_pkt[0].send(sr, packet, interface, echo_reply);
+						return;
+					}
+				}
+				if (sr_verify_interface(interface) == INTERNAL_INTERFACE) {
+					 I consider icmp_hdr_recv->type == 0 and icmp_hdr_recv->type == 0 because I assume that server 1/2 can ping to client 
+					printf("Internal interface:  Receive ICMP request or reply\n");
+					if (!mapping_int) {
+						mapping_int = sr_nat_insert_mapping(sr->nat, ip_hdr_recv->ip_src, icmp_hdr_recv->icmp_id, nat_mapping_icmp);
+					}
+					
+					printf("Before mapping\n");
+					print_hdrs(packet, len);
+					
+					sr_nat_outbound_icmp_packet(sr, packet, len, interface, mapping_int);
+					free(mapping_int);
+				}
+				else if (sr_verify_interface(interface) == EXTERNAL_INTERFACE) {
+					printf("External interface:  Receive ICMP request or reply\n");
+					if (!mapping_ext) {
+						
+					}
+					sr_nat_inbound_icmp_packet(sr, packet, len, interface, mapping_ext);
+					free(mapping_ext);
+				}
+				else {
+					fprintf(stderr, "Not found interface\n");
+				}
+			}
+			else {
+				 I assume that there is one more router between server 1/2 and virtual router, so virtual router can receive ICMP error message from others router 
+				printf(" Receive ICMP error from other routers");
+
+			}
+			
+			break;
+
+*/

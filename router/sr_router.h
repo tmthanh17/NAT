@@ -77,7 +77,7 @@ void sr_init(struct sr_instance* );
 void sr_handlepacket(struct sr_instance* , uint8_t * , unsigned int , char* );
 void sr_send_icmp_echo(struct sr_instance *sr, uint8_t *packet, char *interface_recv, enum sr_icmp_state icmp_state);
 void sr_send_icmp_report(struct sr_instance *sr, uint8_t *packet, char *interface_recv, enum sr_icmp_state icmp_state);
-enum sr_icmp_state sr_forwarding_packet(struct sr_instance *sr, uint8_t *packet, unsigned int len, uint32_t ip_dst);
+enum sr_icmp_state sr_forwarding_packet(struct sr_instance *sr, uint8_t *packet, unsigned int len, uint32_t ip_dst, char *interface_recv);
 
 
 /* -- sr_if.c -- */

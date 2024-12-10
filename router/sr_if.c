@@ -207,12 +207,12 @@ Method : Determin internal or external interface
 int sr_verify_interface(char *interface_recv){
   int i = 0;
   for (i = 0; i < NUMBER_INTERNAL_INTERFACE; i++) {
-    if (strcmp(interface_recv, name_if.int_if[0]) == 0) {
+    if (strcmp(interface_recv, name_if.int_if[i]) == 0) {
       return INTERNAL_INTERFACE;
     }
   }
   for (i = 0; i < NUMBER_EXTERNAL_INTERFACE; i++) {
-    if (strcmp(interface_recv, name_if.ext_if[0]) == 0) {
+    if (strcmp(interface_recv, name_if.ext_if[i]) == 0) {
       return EXTERNAL_INTERFACE;
     }
   }

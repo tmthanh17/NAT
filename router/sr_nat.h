@@ -100,5 +100,6 @@ uint16_t sr_nat_aux_ext(struct sr_nat *nat, sr_nat_mapping_type type);
 static void sr_nat_destroy_mapping_node(struct sr_nat *nat, struct sr_nat_mapping *mapping_node);
 static void sr_nat_destroy_connection_node(struct sr_nat_mapping *mapping_node, struct sr_nat_connection *connection_node);
 static struct sr_nat_mapping *sr_nat_create_mapping_node(struct sr_nat *nat, uint32_t ip_int, uint16_t aux_int, sr_nat_mapping_type type);
-void sr_nat_outbound_icmp_packet(struct sr_instance *sr, uint8_t *packet, unsigned int len, char interface_recv, struct sr_nat_mapping *mapping_node);
+void sr_nat_outbound_icmp_packet(struct sr_instance *sr, uint8_t *packet, struct sr_nat_mapping *mapping_node);
+void sr_nat_inbound_icmp_packet(struct sr_instance *sr, uint8_t *packet, struct sr_nat_mapping *mapping_node);
 #endif

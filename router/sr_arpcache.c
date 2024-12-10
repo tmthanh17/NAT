@@ -44,7 +44,7 @@ void sr_send_arp_request(struct sr_instance *sr, struct sr_if *nexthop_if, uint3
     uint16_t buf_len = sizeof(sr_ethernet_hdr_t) + sizeof(sr_arp_hdr_t);
     uint8_t *buf = calloc(buf_len, 1);
     sr_ethernet_hdr_t *eth_hdr_request = calloc(sizeof(sr_ethernet_hdr_t), 1);
-    sr_arp_hdr_t *arp_hdr_request = calloc(sizeof(arp_hdr_request), 1);
+    sr_arp_hdr_t *arp_hdr_request = calloc(sizeof(sr_arp_hdr_t), 1);
 
     memset(eth_hdr_request->ether_dhost, 255, ETHER_ADDR_LEN);
     memcpy(eth_hdr_request->ether_shost, nexthop_if->addr, ETHER_ADDR_LEN);
@@ -62,10 +62,13 @@ void sr_send_arp_request(struct sr_instance *sr, struct sr_if *nexthop_if, uint3
 
     memcpy(buf, eth_hdr_request, sizeof(sr_ethernet_hdr_t));
     memcpy(buf + sizeof(sr_ethernet_hdr_t), arp_hdr_request, sizeof(sr_arp_hdr_t));
-
+    /*
+    printf("ARP request\n");
+    print_hdrs(buf, buf_len);
+    */
     sr_send_packet(sr, buf, sizeof(sr_ethernet_hdr_t) + sizeof(sr_arp_hdr_t), nexthop_if->name);
     free(eth_hdr_request);
-    free(eth_hdr_request);
+    free(arp_hdr_request);
     free(buf);
 }
 
@@ -78,6 +81,7 @@ enum sr_icmp_state sr_handle_arpreq(struct sr_instance *sr, struct sr_arpreq *re
         if (req->times_sent >= 5) {
             /* send icmp host unreachable to source addr of all pkts waiting
                 on this request */
+            printf("Destination host unreachable\n");
             struct sr_packet *pkt;
             for (pkt = req->packets; pkt != NULL; pkt = pkt->next) {
                 ip_hdr = (sr_ip_hdr_t *) (pkt->buf + sizeof(sr_ethernet_hdr_t));
@@ -88,7 +92,7 @@ enum sr_icmp_state sr_handle_arpreq(struct sr_instance *sr, struct sr_arpreq *re
         }
         else
         {
-            /*sr_send_arp_request(sr, nexthop_if, req->ip);*/
+            sr_send_arp_request(sr, nexthop_if, req->ip, NULL);
             req->sent = current_time;
             req->times_sent++;
         }
@@ -104,6 +108,11 @@ enum sr_icmp_state sr_handle_arpreq(struct sr_instance *sr, struct sr_arpreq *re
 */
 void sr_arpcache_sweepreqs(struct sr_instance *sr) { 
     /* Fill this in */
+    struct sr_arpreq *req;
+    for (req = sr->cache.requests; req != NULL; req = req->next)
+    {
+        sr_handle_arpreq(sr, req);
+    }
 }
 
 /* You should not need to touch the rest of this code. */
