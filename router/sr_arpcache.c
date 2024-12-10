@@ -62,10 +62,10 @@ void sr_send_arp_request(struct sr_instance *sr, struct sr_if *nexthop_if, uint3
 
     memcpy(buf, eth_hdr_request, sizeof(sr_ethernet_hdr_t));
     memcpy(buf + sizeof(sr_ethernet_hdr_t), arp_hdr_request, sizeof(sr_arp_hdr_t));
-    /*
+    
     printf("ARP request\n");
     print_hdrs(buf, buf_len);
-    */
+    
     sr_send_packet(sr, buf, sizeof(sr_ethernet_hdr_t) + sizeof(sr_arp_hdr_t), nexthop_if->name);
     free(eth_hdr_request);
     free(arp_hdr_request);

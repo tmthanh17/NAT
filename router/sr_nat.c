@@ -288,10 +288,6 @@ static void sr_nat_destroy_connection_node(struct sr_nat_mapping *mapping_node, 
 void sr_nat_outbound_icmp_packet(struct sr_instance *sr, uint8_t *packet, struct sr_nat_mapping *mapping_node) {
   struct sr_if *nexthop_if;
   struct sr_rt *rt;
-  /*
-  printf("Before mapping\n");
-  print_hdrs(buf, len);
-  */
  
   sr_ip_hdr_t *ip_hdr_recv = (sr_ip_hdr_t *) (packet + sizeof(sr_ethernet_hdr_t));
   sr_icmp_hdr_t *icmp_hdr_recv = (sr_icmp_hdr_t *) (packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
