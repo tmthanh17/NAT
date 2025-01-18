@@ -164,7 +164,7 @@ struct sr_nat_mapping *sr_nat_insert_mapping(struct sr_nat *nat,
   pthread_mutex_lock(&(nat->lock));
 
   /* handle insert here, create a mapping, and then return a copy of it */
-  struct sr_nat_mapping *mapping_node = sr_nat_create_mapping_node (nat, ip_int, aux_int, type);
+  struct sr_nat_mapping *mapping_node = sr_nat_create_mapping_node(nat, ip_int, aux_int, type);
   
   struct sr_nat_mapping *copy = calloc(sizeof(struct sr_nat_mapping), 1);
   memcpy (copy, mapping_node, sizeof(struct sr_nat_mapping));

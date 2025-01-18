@@ -271,129 +271,110 @@ enum sr_icmp_state sr_forwarding_packet(struct sr_instance *sr, uint8_t *packet,
 		free(buf);
 		return state = time_exceeded;
 	}
-	rt = rt_longest_prefix_match(sr, ip_dst);
-	if (!rt) {
-		printf("Dest Net Unreachable\n");
-		free(buf);
-		return state = dst_net_unreachable;
-	}
-	nexthop_if = sr_get_interface(sr, rt->interface);
-	entry = sr_arpcache_lookup(&sr->cache, ip_dst);
-	
-	if (entry) {
-		/*use next_hop_ip->mac mapping in entry to send the packet*/
-		memcpy(((sr_ethernet_hdr_t *) buf)->ether_dhost, entry->mac, ETHER_ADDR_LEN);
-		memcpy(((sr_ethernet_hdr_t *) buf)->ether_shost, nexthop_if->addr, ETHER_ADDR_LEN);
-		switch (frame_type) {
-			case ETH_IP_ICMP:
-				ip_hdr_recv = (sr_ip_hdr_t *) (buf + sizeof(sr_ethernet_hdr_t));
-				icmp_hdr_recv = (sr_icmp_hdr_t *) (buf + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
-				if (((icmp_hdr_recv->icmp_type == 8) || (icmp_hdr_recv->icmp_type == 0)) && (icmp_hdr_recv->icmp_code == 0)) {
-					mapping_int = sr_nat_lookup_internal(sr->nat, ip_hdr_recv->ip_src, icmp_hdr_recv->icmp_id, nat_mapping_icmp);
-					mapping_ext = sr_nat_lookup_external(sr->nat, icmp_hdr_recv->icmp_id, nat_mapping_icmp);
-					
-					if (sr_verify_interface(interface_recv) == INTERNAL_INTERFACE) {
+		/*sr_arpcache_dump(&sr->cache);*/
+	sr_validate_packet(buf, len);
+	switch (frame_type) {
+		case ETH_IP_ICMP:
+			ip_hdr_recv = (sr_ip_hdr_t *) (buf + sizeof(sr_ethernet_hdr_t));
+			icmp_hdr_recv = (sr_icmp_hdr_t *) (buf + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
+			if (((icmp_hdr_recv->icmp_type == 8) || (icmp_hdr_recv->icmp_type == 0)) && (icmp_hdr_recv->icmp_code == 0)) {
+				mapping_int = sr_nat_lookup_internal(sr->nat, ip_hdr_recv->ip_src, icmp_hdr_recv->icmp_id, nat_mapping_icmp);
+				mapping_ext = sr_nat_lookup_external(sr->nat, icmp_hdr_recv->icmp_id, nat_mapping_icmp);
+
+				printf("Verify interface: %d", sr_verify_interface(interface_recv));
+
+					if (icmp_hdr_recv->icmp_type == 8) {
 						if (!mapping_int) {
 							mapping_int = sr_nat_insert_mapping(sr->nat, ip_hdr_recv->ip_src, icmp_hdr_recv->icmp_id, nat_mapping_icmp);
 						}
 						
-                        printf("Before mapping\n");
-                        print_hdrs(buf, len);
-                        
+						printf("Before mapping\n");
+						print_hdrs(buf, len);
+						
 						sr_nat_outbound_icmp_packet(sr, buf, mapping_int);
 
 						printf("After mapping internal \n");
 						print_hdrs(buf, len);
+
+						rt = rt_longest_prefix_match(sr, ip_dst);
+						if (!rt) {
+							printf("Dest Net Unreachable\n");
+							free(buf);
+							return state = dst_net_unreachable;
+						}
+						nexthop_if = sr_get_interface(sr, rt->interface);
+						entry = sr_arpcache_lookup(&sr->cache, ip_dst);
+						if (entry) {
+								/*use next_hop_ip->mac mapping in entry to send the packet*/
+							/*sr_print_routing_entry(entry);*/
+							memcpy(((sr_ethernet_hdr_t *) buf)->ether_dhost, entry->mac, ETHER_ADDR_LEN);
+							memcpy(((sr_ethernet_hdr_t *) buf)->ether_shost, nexthop_if->addr, ETHER_ADDR_LEN);
+							free(entry);
+						}
+						else {
+							printf("hello1\n");
+							printf("Lack MAC destination \n");
+							print_hdrs(packet, len);
+							req = sr_arpcache_queuereq(&sr->cache, ip_dst, packet, len, nexthop_if->name);
+							state = sr_handle_arpreq(sr, req);
+							return state;
+						}
+						
 						free(mapping_int);
 					}
-					
-					/*
-					else if (sr_verify_interface(interface_recv) == EXTERNAL_INTERFACE) {
+					if (icmp_hdr_recv->icmp_type == 0) {
 						if (!mapping_ext) {
-							return state;
+						return state;
 						}
 						sr_nat_inbound_icmp_packet(sr, buf, mapping_ext);
 						printf("After mapping external \n");
+						print_hdrs(buf, len);
+						ip_dst = ip_hdr_recv->ip_dst;
+						rt = rt_longest_prefix_match(sr, ip_dst);
+						if (!rt) {
+							printf("Dest Net Unreachable\n");
+							free(buf);
+							return state = dst_net_unreachable;
+						}
+						nexthop_if = sr_get_interface(sr, rt->interface);
+						entry = sr_arpcache_lookup(&sr->cache, ip_dst);
+						if (entry) {
+							/*use next_hop_ip->mac mapping in entry to send the packet*/
+							/*sr_print_routing_entry(entry);*/
+							memcpy(((sr_ethernet_hdr_t *) buf)->ether_dhost, entry->mac, ETHER_ADDR_LEN);
+							memcpy(((sr_ethernet_hdr_t *) buf)->ether_shost, nexthop_if->addr, ETHER_ADDR_LEN);
+							free(entry);
+						}
+						else {
+							printf("hello3\n");
+							printf("Lack MAC destination \n");
+							print_hdrs(packet, len);
+							req = sr_arpcache_queuereq(&sr->cache, ip_dst, packet, len, nexthop_if->name);
+							state = sr_handle_arpreq(sr, req);
+							return state;
+						}
+
 						free(mapping_ext);
 					}
-					*/
-				}
-				break;
-			default:
-				break;
-		}
-		free(entry);
-	} 
-	else {
-		printf("Lack MAC destination \n");
-		print_hdrs(packet, len);
-		req = sr_arpcache_queuereq(&sr->cache, ip_dst, packet, len, nexthop_if->name);
-		state = sr_handle_arpreq(sr, req);
-		return state;
-	}
-	/*
-	switch (frame_type) {
-		case ETH_IP_ICMP:
-			if (((icmp_hdr_recv->icmp_type == 8) || (icmp_hdr_recv->icmp_type == 0)) && (icmp_hdr_recv->icmp_code == 0)) {
-				mapping_int = sr_nat_lookup_internal(sr->nat, ip_hdr_recv->ip_src, icmp_hdr_recv->icmp_id, nat_mapping_icmp);
-				mapping_ext = sr_nat_lookup_external(sr->nat, icmp_hdr_recv->icmp_id, nat_mapping_icmp);
-				if (sr_verify_interface(interface_recv) == INTERNAL_INTERFACE) {
-					if (!mapping_int) {
-						mapping_int = sr_nat_insert_mapping(sr->nat, ip_hdr_recv->ip_src, icmp_hdr_recv->icmp_id, nat_mapping_icmp);
-					}
-					sr_nat_outbound_icmp_packet(sr, buf, mapping_int);
-					printf("After mapping internal \n");
-					free(mapping_int);
-				}
-				
-				else if (sr_verify_interface(interface_recv) == EXTERNAL_INTERFACE) {
-					if (!mapping_ext) {
-						return state;
-					}
-					sr_nat_inbound_icmp_packet(sr, buf, mapping_ext);
-					printf("After mapping external \n");
-					free(mapping_ext);
-				}
-				
 			}
 			break;
-		
+		case ETH_IP:
+
+			break;
 		default:
 			break;
 	}
-	*/
-	/*
-	if (((icmp_hdr_recv->icmp_type == 8) || (icmp_hdr_recv->icmp_type == 0)) && (icmp_hdr_recv->icmp_code == 0)) {
 		
-		mapping_int = sr_nat_lookup_internal(sr->nat, ip_hdr_recv->ip_src, icmp_hdr_recv->icmp_id, nat_mapping_icmp);
-		mapping_ext = sr_nat_lookup_external(sr->nat, icmp_hdr_recv->icmp_id, nat_mapping_icmp);
-		printf("interface: %s\n", interface_recv);
-		if (sr_verify_interface(interface_recv) == INTERNAL_INTERFACE) {
-			printf("Hle\n");
-			if (!mapping_int) {
-				 
-				mapping_int = sr_nat_insert_mapping(sr->nat, ip_hdr_recv->ip_src, icmp_hdr_recv->icmp_id, nat_mapping_icmp);
-			}
-			
-			sr_nat_outbound_icmp_packet(sr, buf, mapping_int);
-			free(mapping_int);
-		}
-		else if (sr_verify_interface(interface_recv) == EXTERNAL_INTERFACE) {
-			sr_nat_inbound_icmp_packet(sr, buf, mapping_ext);
-			free(mapping_ext);
-		}
 
-
-	}
-	*/
 
 	((sr_ip_hdr_t *) (buf + sizeof(sr_ethernet_hdr_t)))->ip_ttl--;
 	((sr_ip_hdr_t *) (buf + sizeof(sr_ethernet_hdr_t)))->ip_sum = 0;
 	((sr_ip_hdr_t *) (buf + sizeof(sr_ethernet_hdr_t)))->ip_sum = cksum((sr_ip_hdr_t *) (buf + sizeof(sr_ethernet_hdr_t)), sizeof(sr_ip_hdr_t));
-	/*
+	
+	printf("Received interface %s\n", interface_recv);
 	printf("Forwarding packet\n");
     print_hdrs(buf, len);
-	*/
+	
 	sr_send_packet(sr, buf, len, nexthop_if->name);
 	free(buf);
 	return state;
@@ -415,12 +396,12 @@ void sr_processing_packet(struct sr_instance *sr, uint8_t *packet, unsigned int 
 			arp_hdr_recv = (sr_arp_hdr_t *) (packet + sizeof(sr_ethernet_hdr_t));
 			for (if_node = sr->if_list; if_node != NULL; if_node = if_node->next) {
 				if (arp_hdr_recv->ar_tip == if_node->ip){
-					if (arp_hdr_recv->ar_op == ntohs(arp_op_request)) {
+					if (arp_hdr_recv->ar_op == htons(arp_op_request)) {
 						printf(" Receive ARP request\n");
 						sr_arp_pkt[0].send(sr, if_node, arp_hdr_recv->ar_sip, arp_hdr_recv->ar_sha);
 						break;
 					}
-					else if (arp_hdr_recv->ar_op == ntohs(arp_op_reply)) {
+					else if (arp_hdr_recv->ar_op == htons(arp_op_reply)) {
 						printf("Receive ARP reply\n");
 						req = sr_arpcache_insert(&sr->cache, arp_hdr_recv->ar_sha, arp_hdr_recv->ar_sip);
 						if (req) {
@@ -446,7 +427,12 @@ void sr_processing_packet(struct sr_instance *sr, uint8_t *packet, unsigned int 
 			}
 			/* Packet should be forward */
 			printf("UDP/TCP: Destination is not router's interface\n");
-
+			state = sr_forwarding_packet(sr, packet, len, ip_hdr_recv->ip_dst, interface);
+			if (state != success)
+			{
+				printf("ICMP: Packet has problem\n");
+				sr_icmp_pkt[1].send(sr, packet, interface, state);
+			}
 
 			break;
 		case ETH_IP_ICMP:
